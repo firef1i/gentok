@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>E-Token Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f5f6fa; }
+    .card { box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .truck-chip { display: inline-flex; align-items: center; gap: 4px;
+                  padding: 2px 10px; margin: 2px; border-radius: 999px;
+                  background: #e3f2fd; font-size: .9rem; }
+    .truck-chip .btn-close { font-size: .55em; }
+    .status-badge { font-size: .85rem; padding: 3px 10px; border-radius: 999px; }
+    .status-running { background: #d4edda; color: #155724; }
+    .status-stopped { background: #e2e3e5; color: #383d41; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark mb-4">
+  <div class="container">
+    <span class="navbar-brand mb-0 h1">E-Token Dashboard</span>
+  </div>
+</nav>
+
+<div class="container mb-5">
+  <div class="row g-4">
+
+    <!-- ── Configuration Panel ── -->
+    <div class="col-lg-5">
+      <div class="card">
+        <div class="card-header fw-semibold">Configuration</div>
+        <div class="card-body">
+
+          <form id="configForm">
+            <!-- Username -->
+            <div class="mb-3">
+              <label class="form-label">Login Username</label>
+              <input type="text" class="form-control" id="username"
+                     value="{{ config.get('ETOKEN_USERNAME', '') }}">
+            </div>
+
+            <!-- Password -->
+            <div class="mb-3">
+              <label class="form-label">Login Password</label>
+              <div class="input-group">
+                <input type="password" class="form-control" id="password"
+                       value="{{ config.get('ETOKEN_PASSWORD', '') }}">
+                <button class="btn btn-outline-secondary" type="button"
+                        onclick="togglePw()">Show</button>
+              </div>
+            </div>
+
+            <!-- Truck Numbers -->
+            <div class="mb-3">
+              <label class="form-label">Truck Numbers</label>
+              <div id="truckChips" class="mb-2"></div>
+              <div class="input-group">
+                <input type="text" class="form-control" id="truckInput"
+                       placeholder="e.g. XF68P" maxlength="20">
+                <button class="btn btn-outline-primary" type="button"
+                        onclick="addTruck()">Add</button>
+              </div>
+              <input type="hidden" id="trucks" name="trucks">
+            </div>
+
+            <!-- Material -->
+            <div class="mb-3">
+              <label class="form-label">Material</label>
+              <select class="form-select" id="material">
+                <option value="GOODEARTH"
+                  {{ 'selected' if config.get('MATERIAL', 'GOODEARTH') == 'GOODEARTH' else '' }}>
+                  GOODEARTH</option>
+                <option value="SOFTCLAY"
+                  {{ 'selected' if config.get('MATERIAL') == 'SOFTCLAY' else '' }}>
+                  SOFTCLAY</option>
+              </select>
+            </div>
+
+            <!-- Retry Interval -->
+            <div class="mb-3">
+              <label class="form-label">Retry Interval (seconds)</label>
+              <input type="number" class="form-control" id="cycleInterval"
+                     value="{{ config.get('CYCLE_INTERVAL', '30') }}" min="5" step="1">
+            </div>
+
+            <!-- Start Time -->
+            <div class="mb-3">
+              <label class="form-label">Start Time</label>
+              <input type="time" class="form-control" id="startTime"
+                     value="{{ config.get('START_TIME', '') }}">
+              <div class="form-text">Leave empty to start immediately.</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Save Configuration</button>
+            <div id="saveMsg" class="mt-2 text-success d-none">Settings saved.</div>
+          </form>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Token History Table ── -->
+    <div class="col-lg-7">
+
+      <!-- ── Monitor Control ── -->
+      <div class="card mb-4">
+        <div class="card-header fw-semibold">Token Generation</div>
+        <div class="card-body d-flex align-items-center gap-3">
+          <button id="monitorBtn" class="btn btn-success" onclick="toggleMonitor()">Start</button>
+          <span id="monitorBadge" class="status-badge status-stopped">Stopped</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
+          <span>Token History</span>
+          <div>
+            <button class="btn btn-sm btn-outline-secondary me-1"
+                    onclick="refreshTokens()">Refresh</button>
+            <button class="btn btn-sm btn-outline-danger"
+                    onclick="clearTokens()">Clear All</button>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Truck</th>
+                  <th>Material</th>
+                  <th>Token ID</th>
+                  <th>Site</th>
+                  <th>Generated At</th>
+                </tr>
+              </thead>
+              <tbody id="tokenBody">
+                <tr><td colspan="6" class="text-center text-muted py-3">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Truck chip management ──
+const trucks = new Set();
+
+function initTrucks() {
+  const raw = "{{ config.get('TRUCK_NO', '') }}";
+  if (raw) raw.split(",").forEach(t => { const v = t.trim(); if (v) trucks.add(v); });
+  renderChips();
+}
+
+function renderChips() {
+  const el = document.getElementById("truckChips");
+  el.innerHTML = "";
+  trucks.forEach(t => {
+    const span = document.createElement("span");
+    span.className = "truck-chip";
+    span.innerHTML = t +
+      ' <button type="button" class="btn-close" aria-label="Remove" onclick="removeTruck(\'' + t + '\')"></button>';
+    el.appendChild(span);
+  });
+  document.getElementById("trucks").value = Array.from(trucks).join(",");
+}
+
+function addTruck() {
+  const inp = document.getElementById("truckInput");
+  const v = inp.value.trim().toUpperCase();
+  if (v) { trucks.add(v); renderChips(); inp.value = ""; }
+  inp.focus();
+}
+
+function removeTruck(v) { trucks.delete(v); renderChips(); }
+
+// Allow Enter key to add truck
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("truckInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); addTruck(); }
+  });
+});
+
+// ── Toggle password visibility ──
+function togglePw() {
+  const pw = document.getElementById("password");
+  pw.type = pw.type === "password" ? "text" : "password";
+}
+
+// ── Save config ──
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("configForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const body = new URLSearchParams({
+      username: document.getElementById("username").value,
+      password: document.getElementById("password").value,
+      trucks:   document.getElementById("trucks").value,
+      material: document.getElementById("material").value,
+      cycle_interval: document.getElementById("cycleInterval").value,
+      start_time: document.getElementById("startTime").value,
+    });
+    const res = await fetch("/config", { method: "POST", body });
+    const msg = document.getElementById("saveMsg");
+    if (res.ok) {
+      msg.classList.remove("d-none", "text-danger");
+      msg.classList.add("text-success");
+      msg.textContent = "Settings saved.";
+    } else {
+      msg.classList.remove("d-none", "text-success");
+      msg.classList.add("text-danger");
+      msg.textContent = "Save failed.";
+    }
+    setTimeout(() => msg.classList.add("d-none"), 3000);
+  });
+});
+
+// ── Token table ──
+async function refreshTokens() {
+  try {
+    const res = await fetch("/tokens");
+    const data = await res.json();
+    const tbody = document.getElementById("tokenBody");
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No tokens yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(t => "<tr>" +
+      "<td>" + esc(t.timestamp) + "</td>" +
+      "<td>" + esc(t.truck_no) + "</td>" +
+      "<td>" + esc(t.material) + "</td>" +
+      '<td class="fw-semibold">' + esc(t.token) + "</td>" +
+      "<td>" + esc(t.site) + "</td>" +
+      "<td>" + esc(t.generated_at) + "</td>" +
+      "</tr>").join("");
+  } catch {
+    document.getElementById("tokenBody").innerHTML =
+      '<tr><td colspan="6" class="text-center text-danger py-3">Error loading tokens.</td></tr>';
+  }
+}
+
+async function clearTokens() {
+  if (!confirm("Clear all token history?")) return;
+  await fetch("/tokens/clear", { method: "POST" });
+  refreshTokens();
+}
+
+function esc(s) {
+  if (!s) return "";
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── Monitor control ──
+let monitorRunning = false;
+
+async function pollMonitorStatus() {
+  try {
+    const res = await fetch("/monitor/status");
+    const data = await res.json();
+    monitorRunning = data.running;
+    updateMonitorUI();
+  } catch {
+    // ignore
+  }
+}
+
+function updateMonitorUI() {
+  const btn = document.getElementById("monitorBtn");
+  const badge = document.getElementById("monitorBadge");
+  if (monitorRunning) {
+    btn.textContent = "Stop";
+    btn.className = "btn btn-danger";
+    badge.textContent = "Running";
+    badge.className = "status-badge status-running";
+  } else {
+    btn.textContent = "Start";
+    btn.className = "btn btn-success";
+    badge.textContent = "Stopped";
+    badge.className = "status-badge status-stopped";
+  }
+}
+
+async function toggleMonitor() {
+  const btn = document.getElementById("monitorBtn");
+  btn.disabled = true;
+  try {
+    if (monitorRunning) {
+      await fetch("/monitor/stop", { method: "POST" });
+    } else {
+      await fetch("/monitor/start", { method: "POST" });
+    }
+    // Brief delay then poll to confirm state
+    setTimeout(pollMonitorStatus, 500);
+  } finally {
+    setTimeout(() => { btn.disabled = false; }, 600);
+  }
+}
+
+// ── Init ──
+document.addEventListener("DOMContentLoaded", () => {
+  initTrucks();
+  refreshTokens();
+  setInterval(refreshTokens, 10000);
+  pollMonitorStatus();
+  setInterval(pollMonitorStatus, 5000);
+});
+</script>
+
+</body>
+</html>
