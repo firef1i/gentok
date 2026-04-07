@@ -26,6 +26,8 @@ ETOKEN_PASSWORD = os.getenv("ETOKEN_PASSWORD", "")
 TRUCK_PASSWORD = os.getenv("ETOKEN_PASSWORD", "")
 MATERIAL = os.getenv("MATERIAL", "GOODEARTH")
 TRUCK_NO_LIST = [t.strip() for t in os.getenv("TRUCK_NO", "").split(",") if t.strip()]
+CYCLE_INTERVAL = int(os.getenv("CYCLE_INTERVAL", "30"))
+START_TIME = os.getenv("START_TIME", "")  # e.g. "08:00" — wait until this time before starting cycles
 
 # URLs
 BASE_URL = "https://marinaeaststagingground.com.sg/etoken/index.php/etokenapp"
@@ -38,6 +40,18 @@ DEFAULT_LON = 103.906435
 
 # File paths
 TOKENS_FILE = Path(__file__).parent / "tokens.json"
+
+
+async def safe_query_selector(page, selector, retries=3, delay=0.5):
+    """Query selector with retry to handle navigation context destruction."""
+    for attempt in range(retries):
+        try:
+            return await page.query_selector(selector)
+        except Exception as e:
+            if attempt < retries - 1 and "Execution context was destroyed" in str(e):
+                await asyncio.sleep(delay)
+                continue
+            raise
 
 
 def validate_env():
@@ -81,7 +95,7 @@ async def wait_and_check_login(page, timeout_sec=3):
         return True
     except Exception:
         # Double-check: maybe the form is already there but wasn't detected
-        frmgo = await page.query_selector('form[name="frmgo"]')
+        frmgo = await safe_query_selector(page, 'form[name="frmgo"]')
         if frmgo:
             return True
         return False
@@ -122,7 +136,7 @@ async def debug_page(page, label="debug"):
 
 async def do_login(page):
     """Perform login if needed. Returns True on success, False on failure."""
-    on_token_page = await page.query_selector('form[name="frmgo"]')
+    on_token_page = await safe_query_selector(page, 'form[name="frmgo"]')
 
     if not on_token_page:
         print(
@@ -203,7 +217,7 @@ async def generate_token_cycle(page, truck_no):
         page: Playwright page object.
         truck_no: The truck number to use for this cycle.
 
-    Returns True on success.
+    Returns True on success, False on failure, "already_processed" if truck was already done.
     """
     # --- Truck entry validation ---
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Filling truck entry form...")
@@ -269,7 +283,7 @@ async def generate_token_cycle(page, truck_no):
     await page.wait_for_load_state("networkidle")
     await asyncio.sleep(3)
 
-    error_title = await page.query_selector("#swal2-title, .swal2-title")
+    error_title = await safe_query_selector(page, "#swal2-title, .swal2-title")
     has_error_icon = await page.evaluate(
         '() => document.querySelector(".swal2-icon.swal2-error") !== null'
     )
@@ -278,7 +292,9 @@ async def generate_token_cycle(page, truck_no):
         if error_text:
             print(f"ERROR: Truck entry validation failed: {error_text}")
             if "already" in error_text.lower() and "process" in error_text.lower():
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] Truck already processed, skipping to next.")
+                print(
+                    f"[{datetime.now().strftime('%H:%M:%S')}] Truck already processed, skipping to next."
+                )
                 return "already_processed"
             return False
 
@@ -392,6 +408,33 @@ async def run_monitor(headless=False, stop_event=None):
     if not trucks:
         print("ERROR: No truck numbers configured. Set TRUCK_NO in .env.")
         return
+    cycle_interval = int(os.getenv("CYCLE_INTERVAL", "30"))
+    start_time = os.getenv("START_TIME", "").strip()
+
+    # --- Wait until START_TIME if configured ---
+    if start_time:
+        try:
+            hour, minute = map(int, start_time.split(":"))
+            from datetime import time as dt_time
+            target = dt_time(hour, minute)
+            now = datetime.now().time()
+            if now < target:
+                wait_secs = (
+                    datetime.combine(datetime.today(), target)
+                    - datetime.combine(datetime.today(), now)
+                ).total_seconds()
+                print(
+                    f"[{datetime.now().strftime('%H:%M:%S')}] Waiting until {start_time} "
+                    f"({int(wait_secs)}s) before starting..."
+                )
+                # Interruptible wait
+                for _ in range(int(wait_secs * 10)):
+                    if stop_event and stop_event.is_set():
+                        print("Stopped while waiting for start time.")
+                        return
+                    await asyncio.sleep(0.1)
+        except (ValueError, TypeError):
+            print(f"WARNING: Invalid START_TIME '{start_time}', ignoring.")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=headless)
@@ -431,17 +474,17 @@ async def run_monitor(headless=False, stop_event=None):
 
             cycle += 1
             print(
-                f"[{datetime.now().strftime('%H:%M:%S')}] Next token generation in 10 seconds... (Ctrl+C to stop)"
+                f"[{datetime.now().strftime('%H:%M:%S')}] Next token generation in {cycle_interval} seconds... (Ctrl+C to stop)"
             )
 
             # Interruptible sleep: check stop_event every 0.1s
             if stop_event:
-                for _ in range(30):
+                for _ in range(cycle_interval * 10):
                     if stop_event.is_set():
                         break
                     await asyncio.sleep(0.1)
             else:
-                await asyncio.sleep(3)
+                await asyncio.sleep(cycle_interval)
 
             if stop_event and stop_event.is_set():
                 break
@@ -453,7 +496,7 @@ async def run_monitor(headless=False, stop_event=None):
             await page.goto(BASE_URL, wait_until="networkidle")
 
             # Re-check if session is still valid; re-login if needed
-            on_token_page = await page.query_selector('form[name="frmgo"]')
+            on_token_page = await safe_query_selector(page, 'form[name="frmgo"]')
             if not on_token_page:
                 print(
                     f"[{datetime.now().strftime('%H:%M:%S')}] Session expired, re-logging in..."
