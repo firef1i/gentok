@@ -18,6 +18,9 @@
     .badge-success { background: #d4edda; color: #155724; }
     .badge-failed { background: #f8d7da; color: #721c24; }
     .badge-skipped { background: #e2e3e5; color: #383d41; }
+    .right-col { display: flex; flex-direction: column; height: calc(100vh - 120px); }
+    .right-col > .card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .right-col > .card > .card-body { flex: 1; min-height: 0; overflow-y: auto; }
   </style>
 </head>
 <body>
@@ -34,7 +37,7 @@
     <!-- ── Configuration Panel ── -->
     <div class="col-lg-5">
       <div class="card">
-        <div class="card-header fw-semibold">Configuration</div>
+        <div class="card-header fw-semibold">Token Application</div>
         <div class="card-body">
 
           <div id="configForm">
@@ -58,10 +61,11 @@
 
             <!-- Truck Numbers -->
             <div class="mb-3">
-              <label class="form-label">Truck Numbers
-                <a href="#" class="float-end small text-decoration-none"
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label mb-0">Truck Numbers</label>
+                <a href="#" class="small text-decoration-none"
                    onclick="clearAllTrucks(); return false;">Clear All</a>
-              </label>
+              </div>
               <div id="truckChips" class="mb-2"></div>
               <div class="input-group">
                 <input type="text" class="form-control" id="truckInput"
@@ -87,7 +91,7 @@
 
             <!-- Retry Interval -->
             <div class="mb-3">
-              <label class="form-label">Retry Interval (seconds)</label>
+              <label class="form-label">Retry Interval (minimum 10 seconds)</label>
               <input type="number" class="form-control" id="cycleInterval"
                      value="{{ config.get('CYCLE_INTERVAL', '20') }}" min="10" step="1">
             </div>
@@ -107,26 +111,23 @@
                          value="{{ config.get('END_TIME', '') }}" placeholder="End">
                 </div>
               </div>
-              <div class="form-text">Leave empty to run continuously.</div>
             </div>
 
           </div>
 
         </div>
-      </div>
 
-      <!-- ── Monitor Control ── -->
-      <div class="card mt-4">
-        <div class="card-header fw-semibold">Token Generation</div>
+        <!-- ── Monitor Control ── -->
         <div class="card-body d-flex align-items-center gap-3">
           <button id="monitorBtn" class="btn btn-success" onclick="toggleMonitor()">Start</button>
           <span id="monitorBadge" class="status-badge status-stopped">Stopped</span>
         </div>
       </div>
+
     </div>
 
     <!-- ── Token History Table ── -->
-    <div class="col-lg-7">
+    <div class="col-lg-7 right-col">
 
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
@@ -160,7 +161,7 @@
       </div>
 
       <!-- ── Activity Log ── -->
-      <div class="card mt-4">
+      <div class="card mt-2">
         <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
           <span>Activity Log</span>
           <div>
@@ -256,7 +257,7 @@ async function refreshTokens() {
       tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No tokens yet.</td></tr>';
       return;
     }
-    const items = data.slice(0, 20);
+    const items = data.slice(0, 2000);
     tbody.innerHTML = items.map(t => "<tr>" +
       "<td>" + esc(t.timestamp) + "</td>" +
       "<td>" + esc(t.truck_no) + "</td>" +
@@ -287,7 +288,7 @@ async function refreshActivity() {
       tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No activity yet.</td></tr>';
       return;
     }
-    const items = data.slice(0, 50);
+    const items = data.slice(0, 2000);
     tbody.innerHTML = items.map(a => {
       const statusClass = a.status === "success" ? "badge-success"
                         : a.status === "failed"  ? "badge-failed"
@@ -357,6 +358,12 @@ async function toggleMonitor() {
     if (monitorRunning) {
       await fetch("/monitor/stop", { method: "POST" });
     } else {
+      const startVal = document.getElementById("startTime").value;
+      const endVal = document.getElementById("endTime").value;
+      if (!startVal || !endVal) {
+        alert("Please set both Start Time and End Time in Activate Time.");
+        return;
+      }
       const body = new URLSearchParams({
         username: document.getElementById("username").value,
         password: document.getElementById("password").value,
