@@ -11,13 +11,13 @@ import os
 import sys
 import threading
 from datetime import datetime
-from pathlib import Path
 
 from dotenv import load_dotenv
 from playwright.async_api import async_playwright
+from frozen_utils import get_app_data_dir
 
 # Load environment variables
-env_path = Path(__file__).parent / ".env"
+env_path = get_app_data_dir() / ".env"
 load_dotenv(dotenv_path=env_path)
 
 # Configuration from .env
@@ -39,7 +39,7 @@ DEFAULT_LAT = 1.341453
 DEFAULT_LON = 103.906435
 
 # File paths
-TOKENS_FILE = Path(__file__).parent / "tokens.json"
+TOKENS_FILE = get_app_data_dir() / "tokens.json"
 
 
 async def safe_query_selector(page, selector, retries=3, delay=0.5):
@@ -104,8 +104,8 @@ async def wait_and_check_login(page, timeout_sec=3):
 async def debug_page(page, label="debug"):
     """Save screenshot and HTML for debugging."""
     ts = datetime.now().strftime("%H%M%S")
-    screenshot_path = Path(__file__).parent / f"debug_{label}_{ts}.png"
-    html_path = Path(__file__).parent / f"debug_{label}_{ts}.html"
+    screenshot_path = get_app_data_dir() / f"debug_{label}_{ts}.png"
+    html_path = get_app_data_dir() / f"debug_{label}_{ts}.html"
     await page.screenshot(path=str(screenshot_path), full_page=True)
     html_content = await page.content()
     html_path.write_text(html_content)

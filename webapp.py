@@ -5,17 +5,24 @@ Runs alongside etoken_monitor.py (which reads .env and writes tokens.json).
 """
 
 import json
+import os
 import threading
 import asyncio
-from pathlib import Path
 from flask import Flask, render_template, request, jsonify
 from etoken_monitor import run_monitor
+from frozen_utils import is_frozen, get_app_data_dir, get_bundled_resource_dir, ensure_browsers_installed
 
-BASE_DIR = Path(__file__).parent
-ENV_FILE = BASE_DIR / ".env"
-TOKENS_FILE = BASE_DIR / "tokens.json"
+APP_DATA_DIR = get_app_data_dir()
+ENV_FILE = APP_DATA_DIR / ".env"
+TOKENS_FILE = APP_DATA_DIR / "tokens.json"
 
-app = Flask(__name__)
+# In frozen mode, templates are inside sys._MEIPASS; otherwise use default
+_template_folder = str(get_bundled_resource_dir() / "templates") if is_frozen() else "templates"
+app = Flask(__name__, template_folder=_template_folder)
+
+# Set Playwright browsers path when running frozen
+if is_frozen():
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(APP_DATA_DIR / "browsers")
 
 
 # ---------------------------------------------------------------------------
@@ -141,4 +148,8 @@ def monitor_status():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    if is_frozen():
+        ensure_browsers_installed()
+        app.run(debug=False, port=5000)
+    else:
+        app.run(debug=True, port=5000)
