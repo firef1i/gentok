@@ -18,7 +18,7 @@
     .badge-success { background: #d4edda; color: #155724; }
     .badge-failed { background: #f8d7da; color: #721c24; }
     .badge-skipped { background: #e2e3e5; color: #383d41; }
-    .right-col { display: flex; flex-direction: column; height: calc(100vh - 120px); }
+    .right-col { display: flex; flex-direction: column; overflow: hidden; }
     .right-col > .card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
     .right-col > .card > .card-body { flex: 1; min-height: 0; overflow-y: auto; }
   </style>
@@ -91,9 +91,9 @@
 
             <!-- Retry Interval -->
             <div class="mb-3">
-              <label class="form-label">Retry Interval (minimum 10 seconds)</label>
+              <label class="form-label">Retry Interval (minimum 20 seconds)</label>
               <input type="number" class="form-control" id="cycleInterval"
-                     value="{{ config.get('CYCLE_INTERVAL', '20') }}" min="10" step="1">
+                     value="{{ config.get('CYCLE_INTERVAL', '20') }}" min="20" step="1">
             </div>
 
             <!-- Start / End Time -->
@@ -161,7 +161,7 @@
       </div>
 
       <!-- ── Activity Log ── -->
-      <div class="card mt-2">
+      <div class="card mt-4">
         <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
           <span>Activity Log</span>
           <div>
@@ -386,9 +386,20 @@ async function toggleMonitor() {
   }
 }
 
+// ── Sync right column height to left ──
+function syncHeight() {
+  const leftCol = document.querySelector(".col-lg-5");
+  const rightCol = document.querySelector(".right-col");
+  if (leftCol && rightCol) {
+    rightCol.style.height = leftCol.offsetHeight + "px";
+  }
+}
+
 // ── Init ──
 document.addEventListener("DOMContentLoaded", () => {
   initTrucks();
+  syncHeight();
+  window.addEventListener("resize", syncHeight);
   refreshTokens();
   setInterval(refreshTokens, 10000);
   refreshActivity();
