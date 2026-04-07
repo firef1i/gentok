@@ -9,6 +9,7 @@ import asyncio
 import json
 import os
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -22,9 +23,9 @@ load_dotenv(dotenv_path=env_path)
 # Configuration from .env
 ETOKEN_USERNAME = os.getenv("ETOKEN_USERNAME", "")
 ETOKEN_PASSWORD = os.getenv("ETOKEN_PASSWORD", "")
-TRUCK_NO = os.getenv("TRUCK_NO", "")
-TRUCK_PASSWORD = os.getenv("TRUCK_PASSWORD", "")
+TRUCK_PASSWORD = os.getenv("ETOKEN_PASSWORD", "")
 MATERIAL = os.getenv("MATERIAL", "GOODEARTH")
+TRUCK_NO_LIST = [t.strip() for t in os.getenv("TRUCK_NO", "").split(",") if t.strip()]
 
 # URLs
 BASE_URL = "https://marinaeaststagingground.com.sg/etoken/index.php/etokenapp"
@@ -45,8 +46,8 @@ def validate_env():
     for name, val in [
         ("ETOKEN_USERNAME", ETOKEN_USERNAME),
         ("ETOKEN_PASSWORD", ETOKEN_PASSWORD),
-        ("TRUCK_NO", TRUCK_NO),
-        ("TRUCK_PASSWORD", TRUCK_PASSWORD),
+        ("TRUCK_NO", ",".join(TRUCK_NO_LIST) if TRUCK_NO_LIST else ""),
+        ("TRUCK_PASSWORD", ETOKEN_PASSWORD),
     ]:
         if not val or val.startswith("your_"):
             missing.append(name)
@@ -195,11 +196,18 @@ async def do_login(page):
     return True
 
 
-async def generate_token_cycle(page):
-    """Perform one truck-entry + token-generation cycle. Returns True on success."""
+async def generate_token_cycle(page, truck_no):
+    """Perform one truck-entry + token-generation cycle for a single truck.
+
+    Args:
+        page: Playwright page object.
+        truck_no: The truck number to use for this cycle.
+
+    Returns True on success.
+    """
     # --- Truck entry validation ---
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Filling truck entry form...")
-    print(f"  Truck No: {TRUCK_NO}")
+    print(f"  Truck No: {truck_no}")
 
     print(
         f"[{datetime.now().strftime('%H:%M:%S')}] Waiting for form fields to render..."
@@ -210,7 +218,7 @@ async def generate_token_cycle(page):
     vehno_input = page.locator('input[name="vehno"][type="text"]').first
     passwd_input = page.locator('input[name="passwd"]').last
 
-    await vehno_input.fill(TRUCK_NO)
+    await vehno_input.fill(truck_no)
     await passwd_input.fill(TRUCK_PASSWORD)
 
     await page.evaluate(
@@ -219,7 +227,7 @@ async def generate_token_cycle(page):
                 el.value = truckNo;
             });
         }""",
-        TRUCK_NO,
+        truck_no,
     )
 
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Submitting truck entry form...")
@@ -269,6 +277,9 @@ async def generate_token_cycle(page):
         error_text = (await error_title.inner_text()).strip()
         if error_text:
             print(f"ERROR: Truck entry validation failed: {error_text}")
+            if "already" in error_text.lower() and "process" in error_text.lower():
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Truck already processed, skipping to next.")
+                return "already_processed"
             return False
 
     # --- Token generation ---
@@ -357,7 +368,7 @@ async def generate_token_cycle(page):
     timestamp = datetime.now().isoformat(timespec="seconds")
     token_data = {
         "timestamp": timestamp,
-        "truck_no": TRUCK_NO,
+        "truck_no": truck_no,
         "material": MATERIAL,
         "token": result.get("Last Token Generated:", ""),
         "site": result.get("Site Code:", "CR202"),
@@ -369,8 +380,19 @@ async def generate_token_cycle(page):
     return True
 
 
-async def run_monitor(headless=False):
-    """Main loop: login once, then generate a token every 30 seconds."""
+async def run_monitor(headless=False, stop_event=None):
+    """Main loop: login once, then generate a token for each truck in round-robin.
+
+    Args:
+        headless: Run browser in headless mode.
+        stop_event: Optional threading.Event; when set, the loop exits.
+    """
+    # Re-read truck list from env (fresh config when started from webapp)
+    trucks = [t.strip() for t in os.getenv("TRUCK_NO", "").split(",") if t.strip()]
+    if not trucks:
+        print("ERROR: No truck numbers configured. Set TRUCK_NO in .env.")
+        return
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=headless)
         context = await browser.new_context(
@@ -387,26 +409,42 @@ async def run_monitor(headless=False):
             await browser.close()
             return
 
-        # --- Repeated token generation ---
+        # --- Repeated token generation (round-robin through trucks) ---
         cycle = 1
-        while True:
-            print(f"\n--- Token generation cycle #{cycle} ---")
+        truck_index = 0
+        while not (stop_event and stop_event.is_set()):
+            truck_no = trucks[truck_index % len(trucks)]
+            print(f"\n--- Token generation cycle #{cycle} (Truck: {truck_no}) ---")
             try:
-                success = await generate_token_cycle(page)
-                if not success:
+                result = await generate_token_cycle(page, truck_no)
+                if result:
+                    # True or "already_processed" — move on to next truck
+                    truck_index += 1
+                else:
                     print(
-                        f"[{datetime.now().strftime('%H:%M:%S')}] Cycle #{cycle} failed."
+                        f"[{datetime.now().strftime('%H:%M:%S')}] Cycle #{cycle} failed. Will retry truck {truck_no}."
                     )
             except Exception as e:
                 print(
-                    f"[{datetime.now().strftime('%H:%M:%S')}] Cycle #{cycle} error: {e}"
+                    f"[{datetime.now().strftime('%H:%M:%S')}] Cycle #{cycle} error: {e}. Will retry truck {truck_no}."
                 )
 
             cycle += 1
             print(
                 f"[{datetime.now().strftime('%H:%M:%S')}] Next token generation in 10 seconds... (Ctrl+C to stop)"
             )
-            await asyncio.sleep(3)
+
+            # Interruptible sleep: check stop_event every 0.1s
+            if stop_event:
+                for _ in range(30):
+                    if stop_event.is_set():
+                        break
+                    await asyncio.sleep(0.1)
+            else:
+                await asyncio.sleep(3)
+
+            if stop_event and stop_event.is_set():
+                break
 
             # Navigate back to the base page for the next cycle
             print(
@@ -423,6 +461,8 @@ async def run_monitor(headless=False):
                 if not await do_login(page):
                     print("ERROR: Re-login failed. Stopping.")
                     break
+
+        await browser.close()
 
 
 if __name__ == "__main__":
