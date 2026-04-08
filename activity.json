@@ -1,0 +1,128 @@
+[
+  {
+    "timestamp": "2026-04-07T18:37:01",
+    "truck_no": "XF68P",
+    "material": "GOODEARTH",
+    "status": "skipped",
+    "message": "Truck No. XF68P has already been processed"
+  },
+  {
+    "timestamp": "2026-04-07T18:37:35",
+    "truck_no": "XF68P",
+    "material": "GOODEARTH",
+    "status": "skipped",
+    "message": "Truck No. XF68P has already been processed"
+  },
+  {
+    "timestamp": "2026-04-07T18:38:18",
+    "truck_no": "XF68P",
+    "material": "GOODEARTH",
+    "status": "skipped",
+    "message": "Truck No. XF68P has already been processed"
+  },
+  {
+    "timestamp": "2026-04-07T18:38:54",
+    "truck_no": "XF67P",
+    "material": "GOODEARTH",
+    "status": "failed",
+    "message": "Truck No. XF67P not Found or Not Assigned to Project"
+  },
+  {
+    "timestamp": "2026-04-07T18:39:30",
+    "truck_no": "XF67P",
+    "material": "GOODEARTH",
+    "status": "failed",
+    "message": "Truck No. XF67P not Found or Not Assigned to Project"
+  },
+  {
+    "timestamp": "2026-04-07T18:41:12",
+    "truck_no": "XF68P",
+    "material": "GOODEARTH",
+    "status": "skipped",
+    "message": "Truck No. XF68P has already been processed"
+  },
+  {
+    "timestamp": "2026-04-07T18:41:47",
+    "truck_no": "XF157R",
+    "material": "GOODEARTH",
+    "status": "failed",
+    "message": "No Source Site Entry Record"
+  },
+  {
+    "timestamp": "2026-04-07T18:42:26",
+    "truck_no": "XF157R",
+    "material": "GOODEARTH",
+    "status": "failed",
+    "message": "No Source Site Entry Record"
+  },
+  {
+    "timestamp": "2026-04-07T18:43:01",
+    "truck_no": "XF157R",
+    "material": "GOODEARTH",
+    "status": "failed",
+    "message": "No Source Site Entry Record"
+  },
+  {
+    "timestamp": "2026-04-07T18:43:38",
+    "truck_no": "XF157R",
+    "material": "GOODEARTH",
+    "status": "failed",
+    "message": "No Source Site Entry Record"
+  },
+  {
+    "timestamp": "2026-04-07T18:44:02",
+    "truck_no": "XF68P",
+    "material": "GOODEARTH",
+    "status": "skipped",
+    "message": "Truck No. XF68P has already been processed"
+  },
+  {
+    "timestamp": "2026-04-07T18:44:35",
+    "truck_no": "XF989G",
+    "material": "GOODEARTH",
+    "status": "failed",
+    "message": "No Source Site Entry Record"
+  },
+  {
+    "timestamp": "2026-04-07T18:45:12",
+    "truck_no": "XF989G",
+    "material": "GOODEARTH",
+    "status": "failed",
+    "message": "No Source Site Entry Record"
+  },
+  {
+    "timestamp": "2026-04-07T18:45:39",
+    "truck_no": "XF68P",
+    "material": "GOODEARTH",
+    "status": "skipped",
+    "message": "Truck No. XF68P has already been processed"
+  },
+  {
+    "timestamp": "2026-04-07T18:46:13",
+    "truck_no": "XF68P",
+    "material": "GOODEARTH",
+    "status": "skipped",
+    "message": "Truck No. XF68P has already been processed"
+  },
+  {
+    "timestamp": "2026-04-07T18:46:47",
+    "truck_no": "XF68P",
+    "material": "GOODEARTH",
+    "status": "skipped",
+    "message": "Truck No. XF68P has already been processed"
+  },
+  {
+    "timestamp": "2026-04-07T19:00:41",
+    "truck_no": "XF68P",
+    "material": "GOODEARTH",
+    "status": "failed",
+    "message": "No Source Site Entry Record"
+  },
+  {
+    "timestamp": "2026-04-07T19:01:14",
+    "truck_no": "XF68P",
+    "material": "GOODEARTH",
+    "status": "failed",
+    "message": "No Source Site Entry Record"
+  }
+]

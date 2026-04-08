@@ -10,7 +10,7 @@ import threading
 import asyncio
 from flask import Flask, render_template, request, jsonify
 from etoken_monitor import run_monitor
-from frozen_utils import is_frozen, get_app_data_dir, get_bundled_resource_dir, ensure_browsers_installed
+from frozen_utils import is_frozen, get_app_data_dir, get_bundled_resource_dir, get_playwright_browsers_path, ensure_browsers_installed
 
 APP_DATA_DIR = get_app_data_dir()
 TOKENS_FILE = APP_DATA_DIR / "tokens.json"
@@ -25,7 +25,7 @@ app = Flask(__name__, template_folder=_template_folder)
 
 # Set Playwright browsers path when running frozen
 if is_frozen():
-    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(APP_DATA_DIR / "browsers")
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(get_playwright_browsers_path())
 
 
 # ---------------------------------------------------------------------------

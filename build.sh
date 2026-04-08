@@ -7,14 +7,17 @@ cd "$SCRIPT_DIR"
 
 echo "=== etoken build (macOS) ==="
 
-echo "[1/3] Installing dependencies..."
+echo "[1/4] Installing dependencies..."
 pip install -r requirements.txt
 pip install pyinstaller
 
-echo "[2/3] Running PyInstaller..."
+echo "[2/4] Installing Playwright Chromium..."
+python -m playwright install chromium
+
+echo "[3/4] Running PyInstaller..."
 pyinstaller etoken.spec --clean --noconfirm
 
-echo "[3/3] Creating zip archive..."
+echo "[4/4] Creating zip archive..."
 cd dist
 ZIP_NAME="etoken-mac-$(date +%Y%m%d-%H%M%S).zip"
 zip -r "$ZIP_NAME" etoken/

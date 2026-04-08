@@ -40,23 +40,36 @@ def get_app_data_dir() -> Path:
 
 
 def get_playwright_browsers_path() -> Path:
-    """Return the path where Playwright browsers should be installed."""
+    """Return the path where Playwright browsers are located.
+
+    In frozen mode, returns the bundled location (sys._MEIPASS / "browsers").
+    In dev mode, returns <project_root>/browsers.
+    """
+    if is_frozen():
+        return Path(sys._MEIPASS) / "browsers"
     return get_app_data_dir() / "browsers"
 
 
 def ensure_browsers_installed():
-    """Download Playwright Chromium on first run if not already present.
+    """Ensure Playwright Chromium is available.
 
-    Sets PLAYWRIGHT_BROWSERS_PATH so Playwright looks in <exe_dir>/browsers/.
+    In frozen mode, checks for the bundled browser first. If found, sets
+    PLAYWRIGHT_BROWSERS_PATH and returns immediately — no download needed.
+    Falls back to downloading only when no bundled browser is present.
     """
     browsers_path = get_playwright_browsers_path()
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(browsers_path)
 
-    # Check if chromium is already installed
-    chromium_marker = browsers_path / "chromium-*"
+    # Check if chromium is already installed / bundled
     existing = list(browsers_path.glob("chromium-*")) if browsers_path.exists() else []
     if existing:
         return
+
+    # In frozen mode, if no bundled browser found, that's a build problem
+    if is_frozen():
+        print(f"ERROR: No bundled Chromium found at {browsers_path}")
+        print("The application was not built correctly. Please rebuild.")
+        sys.exit(1)
 
     print(f"First run: installing Playwright Chromium browser to {browsers_path} ...")
     print("This is a one-time download (~187 MB). Please wait...")
