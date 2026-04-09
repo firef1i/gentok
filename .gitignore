@@ -1,7 +1,6 @@
 debug*
 token_gen.html
 tokens.json
-.env
 __pycache__
 build/
 dist/
