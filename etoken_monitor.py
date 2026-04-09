@@ -227,7 +227,7 @@ async def do_login(page):
     return True
 
 
-async def generate_token_cycle(page, truck_no):
+async def generate_token_cycle(page, truck_no, material):
     """Perform one truck-entry + token-generation cycle for a single truck.
 
     Args:
@@ -316,7 +316,7 @@ async def generate_token_cycle(page, truck_no):
                     {
                         "timestamp": datetime.now().isoformat(timespec="seconds"),
                         "truck_no": truck_no,
-                        "material": MATERIAL,
+                        "material": material,
                         "status": "skipped",
                         "message": error_text,
                     }
@@ -326,7 +326,7 @@ async def generate_token_cycle(page, truck_no):
                 {
                     "timestamp": datetime.now().isoformat(timespec="seconds"),
                     "truck_no": truck_no,
-                    "material": MATERIAL,
+                    "material": material,
                     "status": "failed",
                     "message": error_text,
                 }
@@ -335,10 +335,10 @@ async def generate_token_cycle(page, truck_no):
 
     # --- Token generation ---
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Generating token...")
-    print(f"  Material: {MATERIAL}")
+    print(f"  Material: {material}")
 
     material_select = page.locator('select[name="material"]').first
-    await material_select.select_option(value=MATERIAL)
+    await material_select.select_option(value=material)
 
     await page.evaluate(
         """([lat, lon]) => {
@@ -420,7 +420,7 @@ async def generate_token_cycle(page, truck_no):
     token_data = {
         "timestamp": timestamp,
         "truck_no": truck_no,
-        "material": MATERIAL,
+        "material": material,
         "token": result.get("Last Token Generated:", ""),
         "site": result.get("Site Code:", "CR202"),
         "generated_at": result.get("E-Token Generated @", ""),
@@ -432,7 +432,7 @@ async def generate_token_cycle(page, truck_no):
         {
             "timestamp": timestamp,
             "truck_no": truck_no,
-            "material": MATERIAL,
+            "material": material,
             "status": "success",
             "message": token_data["token"],
             "token": token_data["token"],
@@ -456,6 +456,10 @@ async def run_monitor(headless=False, stop_event=None):
     cycle_interval = int(os.getenv("CYCLE_INTERVAL", "20"))
     start_time = os.getenv("START_TIME", "").strip()
     end_time = os.getenv("END_TIME", "").strip()
+    material = os.getenv("MATERIAL", "GOODEARTH")
+    if material not in ("GOODEARTH", "SOFTCLAY"):
+        print(f"ERROR: MATERIAL must be GOODEARTH or SOFTCLAY, got '{material}'")
+        return
 
     # --- Wait until START_TIME if configured ---
     if start_time:
@@ -521,7 +525,7 @@ async def run_monitor(headless=False, stop_event=None):
             truck_no = trucks[truck_index % len(trucks)]
             print(f"\n--- Token generation cycle #{cycle} (Truck: {truck_no}) ---")
             try:
-                result = await generate_token_cycle(page, truck_no)
+                result = await generate_token_cycle(page, truck_no, material)
                 if result:
                     # True or "already_processed" — move on to next truck
                     truck_index += 1
