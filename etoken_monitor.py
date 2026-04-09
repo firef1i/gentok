@@ -417,15 +417,30 @@ async def generate_token_cycle(page, truck_no, material):
     print(f"{'=' * 60}\n")
 
     timestamp = datetime.now().isoformat(timespec="seconds")
+    token_value = result.get("Last Token Generated:", "")
     token_data = {
         "timestamp": timestamp,
         "truck_no": truck_no,
         "material": material,
-        "token": result.get("Last Token Generated:", ""),
+        "token": token_value,
         "site": result.get("Site Code:", "CR202"),
         "generated_at": result.get("E-Token Generated @", ""),
         "entry_record": result.get("Source Site Entry Record:", ""),
     }
+
+    if not token_value:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: Token generation returned empty token.")
+        save_activity(
+            {
+                "timestamp": timestamp,
+                "truck_no": truck_no,
+                "material": material,
+                "status": "failed",
+                "message": "Empty token returned",
+                "token": "",
+            }
+        )
+        return False
 
     save_token(token_data)
     save_activity(
@@ -518,25 +533,43 @@ async def run_monitor(headless=False, stop_event=None):
             await browser.close()
             return
 
-        # --- Repeated token generation (round-robin through trucks) ---
+        # --- Repeated token generation (all trucks per cycle) ---
         cycle = 1
-        truck_index = 0
         while not (stop_event and stop_event.is_set()):
-            truck_no = trucks[truck_index % len(trucks)]
-            print(f"\n--- Token generation cycle #{cycle} (Truck: {truck_no}) ---")
-            try:
-                result = await generate_token_cycle(page, truck_no, material)
-                if result:
-                    # True or "already_processed" — move on to next truck
-                    truck_index += 1
-                else:
+            print(f"\n{'=' * 60}")
+            print(f"TOKEN GENERATION CYCLE #{cycle}")
+            print(f"{'=' * 60}")
+
+            for truck_no in trucks:
+                if stop_event and stop_event.is_set():
+                    break
+
+                print(f"\n--- Cycle #{cycle} | Truck: {truck_no} ---")
+                try:
+                    result = await generate_token_cycle(page, truck_no, material)
+                    if not result and result != "already_processed":
+                        print(
+                            f"[{datetime.now().strftime('%H:%M:%S')}] Truck {truck_no} failed. Continuing to next truck."
+                        )
+                except Exception as e:
                     print(
-                        f"[{datetime.now().strftime('%H:%M:%S')}] Cycle #{cycle} failed. Will retry truck {truck_no}."
+                        f"[{datetime.now().strftime('%H:%M:%S')}] Truck {truck_no} error: {e}. Continuing to next truck."
                     )
-            except Exception as e:
-                print(
-                    f"[{datetime.now().strftime('%H:%M:%S')}] Cycle #{cycle} error: {e}. Will retry truck {truck_no}."
-                )
+
+                # Navigate back to the token page for the next truck
+                if stop_event and stop_event.is_set():
+                    break
+                await page.goto(BASE_URL, wait_until="networkidle")
+
+                # Re-check if session is still valid; re-login if needed
+                on_token_page = await safe_query_selector(page, 'form[name="frmgo"]')
+                if not on_token_page:
+                    print(
+                        f"[{datetime.now().strftime('%H:%M:%S')}] Session expired, re-logging in..."
+                    )
+                    if not await do_login(page):
+                        print("ERROR: Re-login failed. Stopping.")
+                        break
 
             cycle += 1
 
@@ -555,8 +588,11 @@ async def run_monitor(headless=False, stop_event=None):
                 except (ValueError, TypeError):
                     pass
 
+            if stop_event and stop_event.is_set():
+                break
+
             print(
-                f"[{datetime.now().strftime('%H:%M:%S')}] Next token generation in {cycle_interval} seconds... (Ctrl+C to stop)"
+                f"[{datetime.now().strftime('%H:%M:%S')}] Cycle complete. Next cycle in {cycle_interval} seconds... (Ctrl+C to stop)"
             )
 
             # Interruptible sleep: check stop_event every 0.1s
@@ -567,25 +603,6 @@ async def run_monitor(headless=False, stop_event=None):
                     await asyncio.sleep(0.1)
             else:
                 await asyncio.sleep(cycle_interval)
-
-            if stop_event and stop_event.is_set():
-                break
-
-            # Navigate back to the base page for the next cycle
-            print(
-                f"[{datetime.now().strftime('%H:%M:%S')}] Navigating back to token page..."
-            )
-            await page.goto(BASE_URL, wait_until="networkidle")
-
-            # Re-check if session is still valid; re-login if needed
-            on_token_page = await safe_query_selector(page, 'form[name="frmgo"]')
-            if not on_token_page:
-                print(
-                    f"[{datetime.now().strftime('%H:%M:%S')}] Session expired, re-logging in..."
-                )
-                if not await do_login(page):
-                    print("ERROR: Re-login failed. Stopping.")
-                    break
 
         await browser.close()
 
