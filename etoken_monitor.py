@@ -14,6 +14,7 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 from playwright.async_api import async_playwright
+
 from frozen_utils import get_app_data_dir
 
 # Load environment variables
@@ -27,8 +28,10 @@ TRUCK_PASSWORD = os.getenv("ETOKEN_PASSWORD", "")
 MATERIAL = os.getenv("MATERIAL", "GOODEARTH")
 TRUCK_NO_LIST = [t.strip() for t in os.getenv("TRUCK_NO", "").split(",") if t.strip()]
 CYCLE_INTERVAL = int(os.getenv("CYCLE_INTERVAL", "20"))
-START_TIME = os.getenv("START_TIME", "")  # e.g. "08:00" — wait until this time before starting cycles
-END_TIME = os.getenv("END_TIME", "")      # e.g. "18:00" — stop when this time is reached
+START_TIME = os.getenv(
+    "START_TIME", ""
+)  # e.g. "08:00" — wait until this time before starting cycles
+END_TIME = os.getenv("END_TIME", "")  # e.g. "18:00" — stop when this time is reached
 
 # URLs
 BASE_URL = "https://marinaeaststagingground.com.sg/etoken/index.php/etokenapp"
@@ -185,8 +188,8 @@ async def do_login(page):
             return False
 
         try:
-            await username_field.fill(ETOKEN_USERNAME)
-            await password_field.fill(ETOKEN_PASSWORD)
+            await username_field.fill(os.getenv("ETOKEN_USERNAME", ""))
+            await password_field.fill(os.getenv("ETOKEN_PASSWORD", ""))
         except Exception as e:
             print(f"ERROR: Could not fill login fields: {e}")
             await debug_page(page, "login_fill_error")
@@ -247,7 +250,7 @@ async def generate_token_cycle(page, truck_no):
     passwd_input = page.locator('input[name="passwd"]').last
 
     await vehno_input.fill(truck_no)
-    await passwd_input.fill(TRUCK_PASSWORD)
+    await passwd_input.fill(os.getenv("ETOKEN_PASSWORD", ""))
 
     await page.evaluate(
         """(truckNo) => {
@@ -309,21 +312,25 @@ async def generate_token_cycle(page, truck_no):
                 print(
                     f"[{datetime.now().strftime('%H:%M:%S')}] Truck already processed, skipping to next."
                 )
-                save_activity({
+                save_activity(
+                    {
+                        "timestamp": datetime.now().isoformat(timespec="seconds"),
+                        "truck_no": truck_no,
+                        "material": MATERIAL,
+                        "status": "skipped",
+                        "message": error_text,
+                    }
+                )
+                return "already_processed"
+            save_activity(
+                {
                     "timestamp": datetime.now().isoformat(timespec="seconds"),
                     "truck_no": truck_no,
                     "material": MATERIAL,
-                    "status": "skipped",
+                    "status": "failed",
                     "message": error_text,
-                })
-                return "already_processed"
-            save_activity({
-                "timestamp": datetime.now().isoformat(timespec="seconds"),
-                "truck_no": truck_no,
-                "material": MATERIAL,
-                "status": "failed",
-                "message": error_text,
-            })
+                }
+            )
             return False
 
     # --- Token generation ---
@@ -421,14 +428,16 @@ async def generate_token_cycle(page, truck_no):
     }
 
     save_token(token_data)
-    save_activity({
-        "timestamp": timestamp,
-        "truck_no": truck_no,
-        "material": MATERIAL,
-        "status": "success",
-        "message": token_data["token"],
-        "token": token_data["token"],
-    })
+    save_activity(
+        {
+            "timestamp": timestamp,
+            "truck_no": truck_no,
+            "material": MATERIAL,
+            "status": "success",
+            "message": token_data["token"],
+            "token": token_data["token"],
+        }
+    )
     return True
 
 
@@ -452,6 +461,7 @@ async def run_monitor(headless=False, stop_event=None):
     if start_time:
         try:
             from datetime import time as dt_time
+
             hour, minute = map(int, start_time.split(":"))
             target = dt_time(hour, minute)
             now = datetime.now().time()
@@ -477,6 +487,7 @@ async def run_monitor(headless=False, stop_event=None):
     if end_time:
         try:
             from datetime import time as dt_time
+
             hour, minute = map(int, end_time.split(":"))
             end_dt = dt_time(hour, minute)
             if datetime.now().time() >= end_dt:
@@ -529,6 +540,7 @@ async def run_monitor(headless=False, stop_event=None):
             if end_time:
                 try:
                     from datetime import time as dt_time
+
                     hour_e, minute_e = map(int, end_time.split(":"))
                     end_dt = dt_time(hour_e, minute_e)
                     if datetime.now().time() >= end_dt:
