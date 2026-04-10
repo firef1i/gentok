@@ -45,7 +45,7 @@ ETOKEN_PASSWORD = os.getenv("ETOKEN_PASSWORD", "")
 TRUCK_PASSWORD = os.getenv("ETOKEN_PASSWORD", "")
 MATERIAL = os.getenv("MATERIAL", "GOODEARTH")
 TRUCK_NO_LIST = [t.strip() for t in os.getenv("TRUCK_NO", "").split(",") if t.strip()]
-CYCLE_INTERVAL = int(os.getenv("CYCLE_INTERVAL", "20"))
+CYCLE_INTERVAL = int(os.getenv("CYCLE_INTERVAL", "5"))
 START_TIME = os.getenv(
     "START_TIME", ""
 )  # e.g. "08:00" — wait until this time before starting cycles
@@ -488,7 +488,7 @@ async def run_monitor(headless=False, stop_event=None):
     if not trucks:
         print("ERROR: No truck numbers configured. Set TRUCK_NO in .env.")
         return
-    cycle_interval = int(os.getenv("CYCLE_INTERVAL", "20"))
+    cycle_interval = int(os.getenv("CYCLE_INTERVAL", "5"))
     start_time = os.getenv("START_TIME", "").strip()
     end_time = os.getenv("END_TIME", "").strip()
     material = os.getenv("MATERIAL", "GOODEARTH")

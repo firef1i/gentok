@@ -91,9 +91,9 @@
 
             <!-- Retry Interval -->
             <div class="mb-3">
-              <label class="form-label">Retry Interval (minimum 20 seconds)</label>
+              <label class="form-label">Retry Interval (seconds)</label>
               <input type="number" class="form-control" id="cycleInterval"
-                     value="{{ config.get('CYCLE_INTERVAL', '20') }}" min="20" step="1">
+                     value="{{ config.get('CYCLE_INTERVAL', '5') }}" min="0" step="1">
             </div>
 
             <!-- Start / End Time -->

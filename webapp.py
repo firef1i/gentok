@@ -120,7 +120,7 @@ def monitor_start():
         "ETOKEN_PASSWORD": request.form.get("password", "").strip(),
         "TRUCK_NO": request.form.get("trucks", "").strip(),
         "MATERIAL": request.form.get("material", "GOODEARTH").strip(),
-        "CYCLE_INTERVAL": request.form.get("cycle_interval", "20").strip(),
+        "CYCLE_INTERVAL": request.form.get("cycle_interval", "5").strip(),
         "START_TIME": request.form.get("start_time", "").strip(),
         "END_TIME": request.form.get("end_time", "").strip(),
     }
