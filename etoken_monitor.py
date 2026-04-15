@@ -883,11 +883,13 @@ async def run_monitor(headless=False, stop_event=None):
             print(f"TOKEN GENERATION CYCLE #{cycle} | Pending: {pending_trucks}")
             print(f"{'=' * 60}")
 
-            # Process all pending trucks concurrently (each keeps its own session)
-            results = await asyncio.gather(
-                *(process_truck(t, cycle) for t in pending_trucks),
-                return_exceptions=True,
-            )
+            # Stagger request start times by 1 second, then gather all responses
+            tasks = []
+            for i, t in enumerate(pending_trucks):
+                if i > 0:
+                    await asyncio.sleep(1)
+                tasks.append(asyncio.create_task(process_truck(t, cycle)))
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Mark trucks that either succeeded or are now safely in processing
             for truck_no, result in zip(pending_trucks, results):
